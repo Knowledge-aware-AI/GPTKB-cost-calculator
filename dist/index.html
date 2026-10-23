@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Estimate the API spend and construction duration of a GPTKB-style pipeline.">
+  <title>GPTKB Construction Estimator</title>
+  <style>
+    :root { --ink:#102a43; --muted:#627d98; --line:#d9e2ec; --paper:#f7fafc; --card:#fff; --blue:#0d6efd; --navy:#0b2545; --teal:#00a6a6; --amber:#f0a202; --shadow:0 12px 35px rgba(16,42,67,.09); }
+    * { box-sizing:border-box; } body { margin:0; background:var(--paper); color:var(--ink); font:15px/1.45 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }
+    header { color:#fff; background:linear-gradient(120deg,#061a33,#0d4770); padding:42px max(24px,calc((100vw - 1180px)/2)); }
+    .eyebrow { font-size:12px; font-weight:750; letter-spacing:.13em; text-transform:uppercase; color:#7dd3fc; } h1 { margin:8px 0 10px; font-size:clamp(30px,5vw,48px); line-height:1.06; letter-spacing:-.035em; } header p { max-width:740px; color:#c7e7f7; margin:0; font-size:17px; }
+    main { max-width:1180px; margin:0 auto; padding:28px 24px 52px; } .grid { display:grid; grid-template-columns:minmax(0,1.15fr) minmax(320px,.85fr); gap:24px; align-items:start; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow); } .inputs { padding:25px; } .results { padding:25px; position:sticky; top:16px; }
+    h2 { margin:0 0 4px; font-size:22px; letter-spacing:-.02em; } .sub { color:var(--muted); margin:0 0 22px; }
+    fieldset { border:0; padding:0; margin:0 0 24px; } legend,.label { display:block; font-weight:720; margin-bottom:8px; } .hint { color:var(--muted); font-size:12px; margin-top:5px; }
+    select,input[type=number] { width:100%; border:1px solid #bcccdc; border-radius:9px; padding:10px 11px; color:var(--ink); background:#fff; font:inherit; }
+    .twocol { display:grid; grid-template-columns:1fr 1fr; gap:16px; } .choice { display:flex; gap:8px; flex-wrap:wrap; } .choice label { cursor:pointer; display:flex; align-items:center; gap:7px; border:1px solid #bcccdc; border-radius:9px; padding:8px 10px; font-size:14px; }
+    .choice input { accent-color:var(--blue); } .range-row { display:grid; grid-template-columns:1fr auto; align-items:center; gap:12px; } input[type=range] { accent-color:var(--blue); width:100%; } output { min-width:92px; text-align:right; font-weight:750; color:#0b4a6e; font-variant-numeric:tabular-nums; }
+    .conditional { background:#f0f9ff; border-left:3px solid #38bdf8; border-radius:0 9px 9px 0; padding:14px; margin:-4px 0 22px; } .hidden { display:none; }
+    .metric { border-bottom:1px solid var(--line); padding:16px 0; } .metric:first-of-type { padding-top:4px; } .metric:last-of-type { border-bottom:0; } .metric-label { color:var(--muted); font-size:13px; } .metric-value { font-size:30px; font-weight:780; letter-spacing:-.04em; margin:2px 0; } .metric-note { font-size:12px; color:var(--muted); }
+    .breakdown { width:100%; border-collapse:collapse; margin-top:17px; font-size:13px; } .breakdown td { padding:7px 0; border-top:1px solid #edf2f7; } .breakdown td:last-child { text-align:right; font-variant-numeric:tabular-nums; font-weight:700; }
+    .callout { margin-top:19px; padding:13px 14px; border-radius:10px; background:#fff8e8; color:#664b0c; font-size:13px; } details { margin-top:24px; border-top:1px solid var(--line); padding-top:16px; } summary { cursor:pointer; font-weight:730; } details p,details li { color:#486581; font-size:13px; } code { background:#edf2f7; padding:1px 4px; border-radius:4px; }
+    footer { max-width:1180px; margin:0 auto; padding:0 24px 36px; color:var(--muted); font-size:12px; }
+    @media (max-width:850px) { .grid{grid-template-columns:1fr}.results{position:static}.twocol{grid-template-columns:1fr} }
+  </style>
+</head>
+<body>
+<header>
+  <div class="eyebrow">Planning tool · GPTKB-style construction</div>
+  <h1>GPTKB Construction Estimator</h1>
+  <p>Estimate direct API spend and end-to-end construction time for a disambiguated, LLM-derived knowledge base. The workload model is derived from GPTKB 2.0 pipeline phases; all commercial rates are explicit planning assumptions.</p>
+</header>
+<main>
+  <div class="grid">
+    <section class="card inputs" aria-labelledby="inputs-title">
+      <h2 id="inputs-title">Construction scenario</h2>
+      <p class="sub">Choose models, scale, and the execution environment.</p>
+      <div class="twocol">
+        <fieldset><label class="label" for="expensive">Elicitation & descriptions</label><select id="expensive"></select><p class="hint" id="expensiveRate"></p></fieldset>
+        <fieldset><label class="label" for="cheap">NER, NED & disambiguation</label><select id="cheap"></select><p class="hint" id="cheapRate"></p></fieldset>
+      </div>
+      <fieldset><label class="label" for="entities">Entities to process</label><div class="range-row"><input id="entities" type="range" min="100000" max="10000000" step="100000" value="1000000"><output id="entitiesOut"></output></div><p class="hint">0.1-million increments.</p></fieldset>
+      <fieldset><label class="label" for="triples">Expected triples per entity</label><div class="range-row"><input id="triples" type="range" min="1" max="100" step="1" value="30"><output id="triplesOut"></output></div><p class="hint">GPTKB 2.0 phase intensities are scaled from a 30-triple baseline.</p></fieldset>
+      <fieldset><legend>Execution environment</legend><div class="choice"><label><input type="radio" name="platform" value="openrouter" checked> OpenRouter</label><label><input type="radio" name="platform" value="scads"> ScaDS.AI</label></div></fieldset>
+      <fieldset id="openrouterMode"><legend>OpenRouter mode</legend><div class="choice"><label><input type="radio" name="mode" value="batch" checked> Batch mode</label><label><input type="radio" name="mode" value="threaded"> Threaded mode</label></div></fieldset>
+      <div id="threadsBox" class="conditional hidden"><label class="label" for="threads">Concurrent threads</label><div class="range-row"><input id="threads" type="range" min="1" max="1000" step="1" value="100"><output id="threadsOut"></output></div><p class="hint">Applies to both expensive and other-task calls. Actual provider limits may reduce effective concurrency.</p></div>
+      <div id="scadsBox" class="conditional hidden">
+        <div class="twocol">
+          <fieldset><label class="label" for="expCapacity">Expensive-model capacity</label><div class="range-row"><input id="expCapacity" type="range" min="1" max="100" step="1" value="10"><output id="expCapacityOut"></output></div><p class="hint">Million completion tokens/day.</p></fieldset>
+          <fieldset><label class="label" for="cheapCapacity">Other-task capacity</label><div class="range-row"><input id="cheapCapacity" type="range" min="1" max="100" step="1" value="20"><output id="cheapCapacityOut"></output></div><p class="hint">Million completion tokens/day.</p></fieldset>
+        </div>
+      </div>
+      <div class="twocol">
+        <fieldset><label class="label" for="rtt">Round-trip time per API request</label><div class="range-row"><input id="rtt" type="range" min="0.1" max="30" step="0.1" value="2"><output id="rttOut"></output></div><p class="hint">Used for threaded throughput and ScaDS latency checks.</p></fieldset>
+        <fieldset><label class="label" for="cluster">Clustering time per 80k entities</label><div class="range-row"><input id="cluster" type="range" min="1" max="120" step="1" value="10"><output id="clusterOut"></output></div><p class="hint">Serial clustering blocks; default: 10 minutes.</p></fieldset>
+      </div>
+    </section>
+    <aside class="card results" aria-live="polite">
+      <h2>Estimate</h2><p class="sub" id="scenario"></p>
+      <div class="metric"><div class="metric-label">Estimated duration</div><div class="metric-value" id="duration"></div><div class="metric-note" id="durationNote"></div></div>
+      <div class="metric"><div class="metric-label" id="costLabel">Estimated direct API cost</div><div class="metric-value" id="cost"></div><div class="metric-note" id="costNote"></div></div>
+      <table class="breakdown"><tbody><tr><td>Expensive-model completion tokens</td><td id="expTokens"></td></tr><tr><td>Other-task completion tokens</td><td id="cheapTokens"></td></tr><tr><td>Total API requests</td><td id="requests"></td></tr><tr><td>Clustering blocks</td><td id="blocks"></td></tr></tbody></table>
+      <div class="callout" id="callout"></div>
+      <details><summary>Formula and assumptions</summary>
+        <p>The estimator uses a phase-weighted GPTKB 2.0 workload model, not the historical spend in the accompanying workbook. At 30 triples/entity, it reproduces approximately <b>47.7 API calls</b>, <b>9.2k input tokens</b>, and <b>2.1k completion tokens</b> per entity across elicitation, descriptions, NER, NED, and class/relation disambiguation.</p>
+        <ul><li><b>Expensive tasks:</b> 2.9741 requests/entity; 511.6 input tokens/entity; <code>86.1 + 26.6267 × triples</code> completion tokens/entity.</li><li><b>Other tasks:</b> <code>2.8235 + 1.3967 × triples</code> requests/entity; <code>866.3 + 233.333 × triples</code> input tokens/entity; <code>53.6 + 38.543 × triples</code> completion tokens/entity.</li><li><b>Threaded mode:</b> request latency divided by selected concurrent threads, with expensive and other tasks sequenced. <b>ScaDS.AI:</b> each pool is constrained by both completion-token capacity and request latency. <b>Batch:</b> a conservative 24-hour completion window per model pool is assumed, independent of call count.</li><li><b>Clustering:</b> <code>ceil(entities / 80,000) × chosen minutes</code>, serially added after API work.</li><li>OpenRouter rate card (USD / 1M input, output): GPT-6 Astra 5/25; GPT-6 Luna 0.05/0.25; Kimi-K3 0.60/2.50; Gemma-27B 0.10/0.30. These are editable planning assumptions in the source, not price quotes. ScaDS.AI reports zero direct API spend and separately shows the OpenRouter-equivalent estimate.</li></ul>
+      </details>
+    </aside>
+  </div>
+</main>
+<footer>For planning only. It excludes retries, rate-limit backoff, storage, embedding/indexing, human review, infrastructure, and unreported pipeline work.</footer>
+<script>
+(() => {
+  const rates = { "GPT-6 Astra": [5,25], "GPT-6 Luna": [.05,.25], "Kimi-K3": [.60,2.50], "Gemma-27B": [.10,.30] };
+  const $ = id => document.getElementById(id); const nf = x => new Intl.NumberFormat('en-US',{maximumFractionDigits:1}).format(x);
+  for (const id of ['expensive','cheap']) { $(id).innerHTML = Object.keys(rates).map(x => `<option>${x}</option>`).join(''); }
+  $('cheap').value = 'GPT-6 Luna';
+  const val = id => Number($(id).value); const selected = name => document.querySelector(`input[name="${name}"]:checked`).value;
+  const money = x => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:x<100?2:0}).format(x);
+  const token = x => x >= 1e9 ? `${nf(x/1e9)}B` : `${nf(x/1e6)}M`;
+  const duration = hours => hours >= 48 ? `${nf(hours/24)} days` : hours >= 1 ? `${nf(hours)} hours` : `${nf(hours*60)} min`;
+  function sync() {
+    $('entitiesOut').textContent = `${nf(val('entities')/1e6)} M`; $('triplesOut').textContent = val('triples'); $('threadsOut').textContent = val('threads');
+    $('expCapacityOut').textContent = `${val('expCapacity')} M/day`; $('cheapCapacityOut').textContent = `${val('cheapCapacity')} M/day`; $('rttOut').textContent = `${val('rtt')} s`; $('clusterOut').textContent = `${val('cluster')} min`;
+    $('expensiveRate').textContent = `Planning rate: ${money(rates[$('expensive').value][0])}/${money(rates[$('expensive').value][1])} per 1M input/output tokens`;
+    $('cheapRate').textContent = `Planning rate: ${money(rates[$('cheap').value][0])}/${money(rates[$('cheap').value][1])} per 1M input/output tokens`;
+    const scads = selected('platform') === 'scads', batch = !scads && selected('mode') === 'batch';
+    $('openrouterMode').classList.toggle('hidden',scads); $('threadsBox').classList.toggle('hidden',batch); $('scadsBox').classList.toggle('hidden',!scads);
+    const e=val('entities'), t=val('triples'), expIn=e*511.6, expOut=e*(86.1+26.6267*t), cheapIn=e*(866.3+233.333*t), cheapOut=e*(53.6+38.543*t);
+    const expReq=e*2.9741, cheapReq=e*(2.8235+1.3967*t), allReq=expReq+cheapReq, clusterHours=Math.ceil(e/80000)*val('cluster')/60;
+    let apiHours, note;
+    if(batch){ apiHours=48; note='Two conservative 24-hour batch windows (one per model pool), plus clustering.'; }
+    else { const threads=val('threads'), latency=(expReq+cheapReq)*val('rtt')/threads/3600; if(scads){ const capacity=expOut/(val('expCapacity')*1e6)*24 + cheapOut/(val('cheapCapacity')*1e6)*24; apiHours=Math.max(latency,capacity); note=`Limited by ${capacity>=latency?'completion-token capacity':'threaded request latency'} across the two model pools.`; } else { apiHours=latency; note=`${nf(threads)} concurrent threads at ${val('rtt')} s/request; expensive and other-task calls are sequenced.`; } }
+    const totalHours=apiHours+clusterHours, expCost=(expIn*rates[$('expensive').value][0]+expOut*rates[$('expensive').value][1])/1e6, cheapCost=(cheapIn*rates[$('cheap').value][0]+cheapOut*rates[$('cheap').value][1])/1e6, cloud=expCost+cheapCost;
+    $('scenario').textContent=`${nf(e/1e6)}M entities · ${t} triples/entity · ${scads?'ScaDS.AI':batch?'OpenRouter batch':'OpenRouter threaded'}`;
+    $('duration').textContent=duration(totalHours); $('durationNote').textContent=`API work: ${duration(apiHours)} · clustering: ${duration(clusterHours)}. ${note}`;
+    $('costLabel').textContent=scads?'Estimated direct API spend':'Estimated direct API cost'; $('cost').textContent=scads?'$0':money(cloud); $('costNote').textContent=scads?`ScaDS allocation assumed; comparable OpenRouter API price: ${money(cloud)}.`:`Elicitation/descriptions: ${money(expCost)} · NER/NED/disambiguation: ${money(cheapCost)}.`;
+    $('expTokens').textContent=token(expOut); $('cheapTokens').textContent=token(cheapOut); $('requests').textContent=token(allReq); $('blocks').textContent=Math.ceil(e/80000);
+    $('callout').textContent=scads?'The cost figure excludes the value of ScaDS.AI compute, queueing, and staff time.':'Prices are model-specific planning assumptions. Verify the provider route and current rate card before committing budget.';
+  }
+  document.querySelectorAll('input,select').forEach(x=>x.addEventListener('input',sync)); sync();
+})();
+</script>
+</body>
+</html>

@@ -43,7 +43,6 @@
       </div>
       <fieldset><label class="label" for="entities">Entities to process</label><div class="range-row"><input id="entities" type="range" min="100000" max="10000000" step="100000" value="1000000"><output id="entitiesOut"></output></div><p class="hint">0.1-million increments.</p></fieldset>
       <fieldset><label class="label" for="triples">Expected triples per entity</label><div class="range-row"><input id="triples" type="range" min="1" max="100" step="1" value="30"><output id="triplesOut"></output></div></fieldset>
-      <section class="phase-editor" aria-labelledby="phase-title"><header><b id="phase-title">Editable token assumptions</b><p>Change per-phase estimates; all results update immediately. “Per triple” values scale with the triples/entity control.</p></header><table class="phase-table"><thead><tr><th>Phase</th><th>Input</th><th>Basis</th><th>Output</th><th>Basis</th></tr></thead><tbody id="phaseRows"></tbody></table></section>
       <fieldset><legend>Execution environment</legend><div class="choice"><label><input type="radio" name="platform" value="openrouter" checked> OpenRouter</label><label><input type="radio" name="platform" value="scads"> ScaDS.AI</label></div></fieldset>
       <fieldset id="openrouterMode"><legend>OpenRouter mode</legend><div class="choice"><label><input type="radio" name="mode" value="batch" checked> Batch mode</label><label><input type="radio" name="mode" value="threaded"> Threaded mode</label></div></fieldset>
       <div id="threadsBox" class="conditional hidden"><label class="label" for="threads">Concurrent threads</label><div class="range-row"><input id="threads" type="range" min="1" max="1000" step="1" value="100"><output id="threadsOut"></output></div><p class="hint">Applies to both expensive and other-task calls. Actual provider limits may reduce effective concurrency.</p></div>
@@ -54,7 +53,8 @@
         </div>
       </div>
       <div class="twocol">
-        <fieldset><label class="label" for="rtt" id="rttLabel">Round-trip time per API request</label><div class="range-row"><input id="rtt" type="range" min="0.1" max="30" step="0.1" value="2"><output id="rttOut"></output></div><p class="hint" id="rttHint">Used for threaded throughput and ScaDS latency checks.</p></fieldset>
+        <fieldset id="rttBox"><label class="label" for="rtt">Round-trip time per API request</label><div class="range-row"><input id="rtt" type="range" min="0.1" max="30" step="0.1" value="2"><output id="rttOut"></output></div><p class="hint">Used for threaded throughput and ScaDS latency checks.</p></fieldset>
+        <fieldset id="batchTimeBox" class="hidden"><label class="label" for="batchTime">Batch processing time</label><div class="range-row"><input id="batchTime" type="range" min="1" max="60" step="1" value="5"><output id="batchTimeOut"></output></div><p class="hint">Time to process one batch of up to 50,000 API requests.</p></fieldset>
         <fieldset><label class="label" for="cluster">Clustering time per 80k entities</label><div class="range-row"><input id="cluster" type="range" min="1" max="120" step="1" value="10"><output id="clusterOut"></output></div><p class="hint">Serial clustering blocks; default: 10 minutes.</p></fieldset>
       </div>
     </section>
@@ -70,6 +70,7 @@
       </details>
     </aside>
   </div>
+  <section class="phase-editor" aria-labelledby="phase-title"><header><b id="phase-title">Editable token assumptions by phase</b><p>Change per-phase estimates; all results update immediately. “Per triple” values scale with the triples/entity control.</p></header><table class="phase-table"><thead><tr><th>Phase</th><th>Input</th><th>Basis</th><th>Output</th><th>Basis</th></tr></thead><tbody id="phaseRows"></tbody></table></section>
 </main>
 <footer>For planning only. It excludes retries, rate-limit backoff, storage, embedding/indexing, human review, infrastructure, and unreported pipeline work.</footer>
 <script>
@@ -96,18 +97,17 @@
   const duration = hours => hours >= 48 ? `${nf(hours/24)} days` : hours >= 1 ? `${nf(hours)} hours` : `${nf(hours*60)} min`;
   function sync() {
     $('entitiesOut').textContent = `${nf(val('entities')/1e6)} M`; $('triplesOut').textContent = val('triples'); $('threadsOut').textContent = val('threads');
-    $('expCapacityOut').textContent = `${val('expCapacity')} M/day`; $('cheapCapacityOut').textContent = `${val('cheapCapacity')} M/day`; $('rttOut').textContent = `${val('rtt')} s`; $('clusterOut').textContent = `${val('cluster')} min`;
+    $('expCapacityOut').textContent = `${val('expCapacity')} M/day`; $('cheapCapacityOut').textContent = `${val('cheapCapacity')} M/day`; $('rttOut').textContent = `${val('rtt')} s`; $('batchTimeOut').textContent = `${val('batchTime')} min`; $('clusterOut').textContent = `${val('cluster')} min`;
     $('expensiveRate').textContent = `Planning rate: ${money(rates[$('expensive').value][0])}/${money(rates[$('expensive').value][1])} per 1M input/output tokens`;
     $('cheapRate').textContent = `Planning rate: ${money(rates[$('cheap').value][0])}/${money(rates[$('cheap').value][1])} per 1M input/output tokens`;
     const scads = selected('platform') === 'scads', batch = !scads && selected('mode') === 'batch';
-    $('openrouterMode').classList.toggle('hidden',scads); $('threadsBox').classList.toggle('hidden',batch); $('scadsBox').classList.toggle('hidden',!scads);
-    $('rttLabel').textContent=batch?'Batch processing time':'Round-trip time per API request'; $('rttHint').textContent=batch?'Interpreted as the time to process one batch of up to 50,000 API requests.':'Used for threaded throughput and ScaDS latency checks.';
+    $('openrouterMode').classList.toggle('hidden',scads); $('threadsBox').classList.toggle('hidden',batch); $('scadsBox').classList.toggle('hidden',!scads); $('rttBox').classList.toggle('hidden',batch); $('batchTimeBox').classList.toggle('hidden',!batch);
     const e=val('entities'), t=val('triples');
     const totals = phases.reduce((all,p) => { const factor = basis => basis==='triple' ? e*t : e; const input=val(`${p.id}Input`)*factor(p.inputBasis), output=val(`${p.id}Output`)*factor(p.outputBasis); all[p.group].input+=input; all[p.group].output+=output; return all; }, {expensive:{input:0,output:0},other:{input:0,output:0}});
     const expIn=totals.expensive.input, expOut=totals.expensive.output, cheapIn=totals.other.input, cheapOut=totals.other.output;
     const expReq=e*2.9741, cheapReq=e*(2.8235+1.3967*t), allReq=expReq+cheapReq, clusterHours=Math.ceil(e/80000)*val('cluster')/60;
     let apiHours, note;
-    if(batch){ const batches=Math.ceil(allReq/50000); apiHours=batches*val('rtt')/3600; note=`${nf(batches)} batches of up to 50,000 requests; ${val('rtt')} s is treated as processing time per batch.`; }
+    if(batch){ const batches=Math.ceil(allReq/50000); apiHours=batches*val('batchTime')/60; note=`${nf(batches)} batches of up to 50,000 requests; ${val('batchTime')} min per batch.`; }
     else { const threads=val('threads'), latency=(expReq+cheapReq)*val('rtt')/threads/3600; if(scads){ const capacity=expOut/(val('expCapacity')*1e6)*24 + cheapOut/(val('cheapCapacity')*1e6)*24; apiHours=Math.max(latency,capacity); note=`Limited by ${capacity>=latency?'completion-token capacity':'threaded request latency'} across the two model pools.`; } else { apiHours=latency; note=`${nf(threads)} concurrent threads at ${val('rtt')} s/request; expensive and other-task calls are sequenced; clustering is added below.`; } }
     const totalHours=apiHours+clusterHours, expCost=(expIn*rates[$('expensive').value][0]+expOut*rates[$('expensive').value][1])/1e6, cheapCost=(cheapIn*rates[$('cheap').value][0]+cheapOut*rates[$('cheap').value][1])/1e6, cloud=expCost+cheapCost;
     $('scenario').textContent=`${nf(e/1e6)}M entities · ${t} triples/entity · ${scads?'ScaDS.AI':batch?'OpenRouter batch':'OpenRouter threaded'}`;

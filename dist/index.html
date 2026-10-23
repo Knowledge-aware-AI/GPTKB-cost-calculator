@@ -18,6 +18,7 @@
     .twocol { display:grid; grid-template-columns:1fr 1fr; gap:16px; } .choice { display:flex; gap:8px; flex-wrap:wrap; } .choice label { cursor:pointer; display:flex; align-items:center; gap:7px; border:1px solid #bcccdc; border-radius:9px; padding:8px 10px; font-size:14px; }
     .choice input { accent-color:var(--blue); } .range-row { display:grid; grid-template-columns:1fr auto; align-items:center; gap:12px; } input[type=range] { accent-color:var(--blue); width:100%; } output { min-width:92px; text-align:right; font-weight:750; color:#0b4a6e; font-variant-numeric:tabular-nums; }
     .conditional { background:#f0f9ff; border-left:3px solid #38bdf8; border-radius:0 9px 9px 0; padding:14px; margin:-4px 0 22px; } .hidden { display:none; }
+    .phase-editor { margin:4px 0 24px; border:1px solid var(--line); border-radius:11px; overflow:hidden; } .phase-editor header { display:block; background:#edf7ff; color:var(--ink); padding:12px 14px; } .phase-editor header p { margin:2px 0 0; color:var(--muted); font-size:12px; } .phase-table { width:100%; border-collapse:collapse; font-size:12px; } .phase-table th { background:#f7fafc; color:var(--muted); text-align:left; padding:8px; font-weight:700; } .phase-table td { padding:7px 8px; border-top:1px solid #edf2f7; vertical-align:middle; } .phase-table input { width:72px; padding:5px 6px; border-radius:6px; font-size:12px; text-align:right; } .phase-table .unit { color:var(--muted); white-space:nowrap; font-size:11px; } @media (max-width:520px) { .phase-table th:nth-child(3),.phase-table td:nth-child(3),.phase-table th:nth-child(5),.phase-table td:nth-child(5) { display:none; } }
     .metric { border-bottom:1px solid var(--line); padding:16px 0; } .metric:first-of-type { padding-top:4px; } .metric:last-of-type { border-bottom:0; } .metric-label { color:var(--muted); font-size:13px; } .metric-value { font-size:30px; font-weight:780; letter-spacing:-.04em; margin:2px 0; } .metric-note { font-size:12px; color:var(--muted); }
     .breakdown { width:100%; border-collapse:collapse; margin-top:17px; font-size:13px; } .breakdown td { padding:7px 0; border-top:1px solid #edf2f7; } .breakdown td:last-child { text-align:right; font-variant-numeric:tabular-nums; font-weight:700; }
     .callout { margin-top:19px; padding:13px 14px; border-radius:10px; background:#fff8e8; color:#664b0c; font-size:13px; } details { margin-top:24px; border-top:1px solid var(--line); padding-top:16px; } summary { cursor:pointer; font-weight:730; } details p,details li { color:#486581; font-size:13px; } code { background:#edf2f7; padding:1px 4px; border-radius:4px; }
@@ -42,6 +43,7 @@
       </div>
       <fieldset><label class="label" for="entities">Entities to process</label><div class="range-row"><input id="entities" type="range" min="100000" max="10000000" step="100000" value="1000000"><output id="entitiesOut"></output></div><p class="hint">0.1-million increments.</p></fieldset>
       <fieldset><label class="label" for="triples">Expected triples per entity</label><div class="range-row"><input id="triples" type="range" min="1" max="100" step="1" value="30"><output id="triplesOut"></output></div></fieldset>
+      <section class="phase-editor" aria-labelledby="phase-title"><header><b id="phase-title">Editable token assumptions</b><p>Change per-phase estimates; all results update immediately. “Per triple” values scale with the triples/entity control.</p></header><table class="phase-table"><thead><tr><th>Phase</th><th>Input</th><th>Basis</th><th>Output</th><th>Basis</th></tr></thead><tbody id="phaseRows"></tbody></table></section>
       <fieldset><legend>Execution environment</legend><div class="choice"><label><input type="radio" name="platform" value="openrouter" checked> OpenRouter</label><label><input type="radio" name="platform" value="scads"> ScaDS.AI</label></div></fieldset>
       <fieldset id="openrouterMode"><legend>OpenRouter mode</legend><div class="choice"><label><input type="radio" name="mode" value="batch" checked> Batch mode</label><label><input type="radio" name="mode" value="threaded"> Threaded mode</label></div></fieldset>
       <div id="threadsBox" class="conditional hidden"><label class="label" for="threads">Concurrent threads</label><div class="range-row"><input id="threads" type="range" min="1" max="1000" step="1" value="100"><output id="threadsOut"></output></div><p class="hint">Applies to both expensive and other-task calls. Actual provider limits may reduce effective concurrency.</p></div>
@@ -63,8 +65,8 @@
       <table class="breakdown"><tbody><tr><td>Expensive-model completion tokens</td><td id="expTokens"></td></tr><tr><td>Other-task completion tokens</td><td id="cheapTokens"></td></tr><tr><td>Total API requests</td><td id="requests"></td></tr><tr><td>Clustering blocks</td><td id="blocks"></td></tr></tbody></table>
       <div class="callout" id="callout"></div>
       <details><summary>Formula and assumptions</summary>
-        <p>The estimator uses a phase-weighted GPTKB 2.0 workload model, not the historical spend in the accompanying workbook. At 30 triples/entity, it reproduces approximately <b>47.7 API calls</b>, <b>9.2k input tokens</b>, and <b>2.1k completion tokens</b> per entity across elicitation, descriptions, NER, NED, and class/relation disambiguation.</p>
-        <ul><li><b>Expensive tasks:</b> 2.9741 requests/entity; 511.6 input tokens/entity; <code>86.1 + 26.6267 × triples</code> completion tokens/entity.</li><li><b>Other tasks:</b> <code>2.8235 + 1.3967 × triples</code> requests/entity; <code>866.3 + 233.333 × triples</code> input tokens/entity; <code>53.6 + 38.543 × triples</code> completion tokens/entity.</li><li><b>Threaded mode:</b> request latency divided by selected concurrent threads, with expensive and other tasks sequenced. <b>ScaDS.AI:</b> each pool is constrained by both completion-token capacity and request latency. <b>Batch:</b> <code>ceil(requests / 50,000) × selected time</code>; the selected round-trip time is interpreted as batch-processing time.</li><li><b>Clustering:</b> <code>ceil(entities / 80,000) × chosen minutes</code>, serially added after API work in every execution mode.</li><li>OpenRouter rate card (USD / 1M input, output): GPT-6 Astra 5/25; GPT-6 Luna 0.05/0.25; Kimi-K3 0.60/2.50; Gemma-27B 0.10/0.30. These are editable planning assumptions in the source, not price quotes. ScaDS.AI reports zero direct API spend and separately shows the OpenRouter-equivalent estimate.</li></ul>
+        <p>The estimator uses a phase-weighted GPTKB 2.0 workload model, not the historical spend in the accompanying workbook. The editable phase table is the source of truth for token consumption. At its defaults and 30 triples/entity, it gives approximately <b>47.7 API calls</b>, <b>9.2k input tokens</b>, and <b>2.1k completion tokens</b> per entity.</p>
+        <ul><li><b>API calls:</b> 2.9741 expensive-model requests/entity and <code>2.8235 + 1.3967 × triples</code> other-task requests/entity.</li><li><b>Threaded mode:</b> request latency divided by selected concurrent threads, with expensive and other tasks sequenced. <b>ScaDS.AI:</b> each pool is constrained by both completion-token capacity and request latency. <b>Batch:</b> <code>ceil(requests / 50,000) × selected time</code>; the selected round-trip time is interpreted as batch-processing time.</li><li><b>Clustering:</b> <code>ceil(entities / 80,000) × chosen minutes</code>, serially added after API work in every execution mode.</li><li>OpenRouter rate card (USD / 1M input, output): GPT-6 Astra 5/25; GPT-6 Luna 0.05/0.25; Kimi-K3 0.60/2.50; Gemma-27B 0.10/0.30. These are editable planning assumptions in the source, not price quotes. ScaDS.AI reports zero direct API spend and separately shows the OpenRouter-equivalent estimate.</li></ul>
       </details>
     </aside>
   </div>
@@ -73,8 +75,20 @@
 <script>
 (() => {
   const rates = { "GPT-6 Astra": [5,25], "GPT-6 Luna": [.05,.25], "Kimi-K3": [.60,2.50], "Gemma-27B": [.10,.30] };
+  const phases = [
+    ['elicitation','Elicitation','expensive',265.7,'entity',26.6267,'triple'],
+    ['ner','Entity NER','other',140,'triple',33.333,'triple'],
+    ['ned1','NED 1: triple context','other',93.333,'triple',5.21,'triple'],
+    ['entityDescription','Entity descriptions','expensive',228.6,'entity',76.3,'entity'],
+    ['ned2','NED 2: description context','other',569.7,'entity',32.5,'entity'],
+    ['classDisambiguation','Class disambiguation','other',91.2,'entity',5.4,'entity'],
+    ['classDescription','Class descriptions','expensive',3.4,'entity',3.2,'entity'],
+    ['relationDisambiguation','Relation disambiguation','other',205.4,'entity',15.7,'entity'],
+    ['relationDescription','Relation descriptions','expensive',13.9,'entity',6.6,'entity']
+  ].map(([id,label,group,input,inputBasis,output,outputBasis])=>({id,label,group,input,inputBasis,output,outputBasis}));
   const $ = id => document.getElementById(id); const nf = x => new Intl.NumberFormat('en-US',{maximumFractionDigits:1}).format(x);
   for (const id of ['expensive','cheap']) { $(id).innerHTML = Object.keys(rates).map(x => `<option>${x}</option>`).join(''); }
+  $('phaseRows').innerHTML = phases.map(p => `<tr><td>${p.label}</td><td><input id="${p.id}Input" type="number" min="0" step="0.1" value="${p.input}" aria-label="${p.label} input tokens"></td><td class="unit">per ${p.inputBasis}</td><td><input id="${p.id}Output" type="number" min="0" step="0.1" value="${p.output}" aria-label="${p.label} output tokens"></td><td class="unit">per ${p.outputBasis}</td></tr>`).join('');
   $('cheap').value = 'GPT-6 Luna';
   const val = id => Number($(id).value); const selected = name => document.querySelector(`input[name="${name}"]:checked`).value;
   const money = x => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:x<100?2:0}).format(x);
@@ -88,7 +102,9 @@
     const scads = selected('platform') === 'scads', batch = !scads && selected('mode') === 'batch';
     $('openrouterMode').classList.toggle('hidden',scads); $('threadsBox').classList.toggle('hidden',batch); $('scadsBox').classList.toggle('hidden',!scads);
     $('rttLabel').textContent=batch?'Batch processing time':'Round-trip time per API request'; $('rttHint').textContent=batch?'Interpreted as the time to process one batch of up to 50,000 API requests.':'Used for threaded throughput and ScaDS latency checks.';
-    const e=val('entities'), t=val('triples'), expIn=e*511.6, expOut=e*(86.1+26.6267*t), cheapIn=e*(866.3+233.333*t), cheapOut=e*(53.6+38.543*t);
+    const e=val('entities'), t=val('triples');
+    const totals = phases.reduce((all,p) => { const factor = basis => basis==='triple' ? e*t : e; const input=val(`${p.id}Input`)*factor(p.inputBasis), output=val(`${p.id}Output`)*factor(p.outputBasis); all[p.group].input+=input; all[p.group].output+=output; return all; }, {expensive:{input:0,output:0},other:{input:0,output:0}});
+    const expIn=totals.expensive.input, expOut=totals.expensive.output, cheapIn=totals.other.input, cheapOut=totals.other.output;
     const expReq=e*2.9741, cheapReq=e*(2.8235+1.3967*t), allReq=expReq+cheapReq, clusterHours=Math.ceil(e/80000)*val('cluster')/60;
     let apiHours, note;
     if(batch){ const batches=Math.ceil(allReq/50000); apiHours=batches*val('rtt')/3600; note=`${nf(batches)} batches of up to 50,000 requests; ${val('rtt')} s is treated as processing time per batch.`; }
